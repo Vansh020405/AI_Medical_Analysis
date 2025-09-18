@@ -200,6 +200,51 @@ def generate_structured_report(index, chunks, embeddings):
         ]
     )
     return completion.choices[0].message.content
+def generate_ranked_diagnosis(index, chunks, embeddings):
+    if index is None or not chunks:
+        return "⚠️ No documents uploaded yet."
+    context = "\n\n".join([f"[{c['source']}]\n{c['text']}" for c in chunks[:10]])
+
+    completion = safe_chat_completion(
+        model="gpt-4o-mini",
+        temperature=0,
+        messages=[
+            {"role": "system", "content": (
+                "You are a clinical AI assistant. Based strictly on the provided context, "
+                "generate a **Ranked Diagnosis List** with:\n"
+                "- Probable diagnoses (ranked in descending likelihood)\n"
+                "- Confidence levels (High / Medium / Low)\n"
+                "- Justification tied to evidence from patient data"
+            )},
+            {"role": "user", "content": f"Context:\n{context}\n\nGenerate the ranked diagnosis list."}
+        ]
+    )
+    return completion.choices[0].message.content
+
+    # Red-Flag Alerts
+def generate_red_flag_alerts(index, chunks, embeddings):
+    if index is None or not chunks:
+        return "⚠️ No documents uploaded yet."
+    
+    context = "\n\n".join([f"[{c['source']}]\n{c['text']}" for c in chunks[:10]])
+
+    completion = safe_chat_completion(
+        model="gpt-4o-mini",
+        temperature=0,
+        messages=[
+            {"role": "system", "content": (
+                "You are a clinical AI assistant. From the provided context, "
+                "detect urgent medical conditions (Red-Flag Alerts), such as sepsis, stroke, etc. "
+                "For each alert, include:\n"
+                "- Condition name\n"
+                "- Priority level (High / Medium / Low)\n"
+                "- Escalation instructions (e.g., immediate ER visit, urgent doctor consult)\n"
+                "Highlight key terms in **bold**."
+            )},
+            {"role": "user", "content": f"Context:\n{context}\n\nGenerate Red-Flag Alerts with prioritization and escalation."}
+        ]
+    )
+    return completion.choices[0].message.content
 
 # Global store
 uploaded_chunks = []
@@ -242,8 +287,23 @@ def ask():
 def structured_report():
     try:
         report = generate_structured_report(index, uploaded_chunks, embeddings)
-        structured_report_log.append(report)
         return jsonify({"report": report})
+    except Exception as e:
+        return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
+
+@app.route("/ranked-diagnosis", methods=["GET"])
+def get_ranked_diagnosis():
+    try:
+        diagnosis = generate_ranked_diagnosis(index, uploaded_chunks, embeddings)
+        return jsonify({"diagnosis": diagnosis})
+    except Exception as e:
+        return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
+
+@app.route("/red-flag-alerts", methods=["GET"])
+def get_red_flag_alerts():
+    try:
+        alerts = generate_red_flag_alerts(index, uploaded_chunks, embeddings)
+        return jsonify({"alerts": alerts})
     except Exception as e:
         return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
 

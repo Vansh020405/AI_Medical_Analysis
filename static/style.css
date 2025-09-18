@@ -405,6 +405,78 @@ details[open] > summary.section-title::after {
   margin-bottom: 8px;
 }
 
+/* Report Text Styles */
+.report-text {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-size: 0.95em;
+  background: #f8f9fa;
+  padding: 1.25rem;
+  border-radius: 8px;
+  border: 1px solid #dee2e6;
+  margin-top: 1rem;
+}
+
+.report-text h3,
+.report-text h4 {
+  color: var(--brand-2);
+  margin: 1.5rem 0 0.75rem 0;
+}
+
+.report-text h3:first-child,
+.report-text h4:first-child {
+  margin-top: 0;
+}
+
+.report-text ul,
+.report-text ol {
+  margin: 0.5rem 0 1rem 1.5rem;
+  padding: 0;
+}
+
+.report-text li {
+  margin-bottom: 0.5rem;
+}
+
+/* Ranked Diagnosis Section */
+#diagnosis-section {
+  margin-top: 1.5rem;
+}
+
+#diagnosisText {
+  background: var(--panel-2);
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  margin-top: 1rem;
+}
+
+#diagnosisText h3 {
+  color: var(--brand-2);
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 1.1em;
+}
+
+#diagnosisText h3:first-child {
+  margin-top: 0;
+}
+
+#diagnosisText ul,
+#diagnosisText ol {
+  padding-left: 1.5rem;
+  margin: 0.5rem 0 1rem;
+}
+
+#diagnosisText li {
+  margin-bottom: 0.5rem;
+}
+
+#diagnosisText strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .answer-subtitle {
   margin: 0 0 8px 0;
   font-size: 14px;
