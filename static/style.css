@@ -425,6 +425,10 @@ details[open] > summary.section-title::after {
   .answer-row { grid-template-columns: 1fr; }
 }
 
+.muted { color: var(--muted); }
+
+#structured-report .answer-card { margin-top: 12px; }
+
 
 .site-footer {
   background-color: #ffffff;

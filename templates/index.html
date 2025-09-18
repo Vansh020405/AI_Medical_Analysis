@@ -166,6 +166,39 @@
                 {% endif %}
             </div>
         </section>
+        
+        <section class="card" aria-labelledby="structured-report-title" id="structured-report">
+            <h2 class="section-title with-icon" id="structured-report-title"><span class="bot-icon" aria-hidden="true">📋</span> Structured Clinical Report</h2>
+            <p class="muted">Generate a single, clinician-friendly consolidated report grounded in your uploaded documents.</p>
+
+            <form id="reportForm" class="composer" method="POST">
+                <textarea id="reportQuestion" class="composer-input" name="reportQuestion" rows="1" placeholder="e.g., Summarize key findings and recommended next steps">{{ last_query or '' }}</textarea>
+                <div class="composer-actions">
+                    <button id="generateReportBtn" class="send-btn" type="submit" title="Generate structured report">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" /></svg>
+                    </button>
+                </div>
+            </form>
+
+            <div id="reportSpinner" class="spinner hidden" role="status" aria-live="polite">
+                <div class="spinner-dot"></div>
+                <div class="spinner-dot"></div>
+                <div class="spinner-dot"></div>
+                <div class="spinner-text">Generating report…</div>
+            </div>
+
+            <div id="reportOutput" class="answer-card hidden" aria-live="polite">
+                <h3 class="answer-subtitle">Report</h3>
+                <div id="reportContent" class="answer-details"></div>
+
+                <h3 class="answer-subtitle">References</h3>
+                <div id="reportRefs" class="answer-refs"></div>
+
+                <div class="answer-actions">
+                    <button id="copyReportBtn" class="mini-btn copy-btn" data-copy="" title="Copy report">📋 Copy</button>
+                </div>
+            </div>
+        </section>
     </main>
 
     <footer class="site-footer">
@@ -203,6 +236,12 @@
         const askForm = document.getElementById('askForm');
         const queryEl = document.getElementById('query');
         const typing = document.getElementById('typing');
+        
+        // Simple markdown-ish renderer for emphasis and breaks
+        const renderMarkdown = (s = '') => s
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1<\/strong>')
+            .replace(/\n\n/g, '<br/><br/>')
+            .replace(/\n-\s+/g, '<br/>• ');
 
         // Drag & drop
         if (dropzone && fileInput) {
@@ -449,6 +488,65 @@
             if (refsEl) refsEl.innerHTML = md(refMatch ? (refMatch[2] || refMatch[1] || '').trim() : '—');
             if (nextEl) nextEl.innerHTML = md(nextMatch ? nextMatch[1].trim() : '');
 
+        }
+
+        // Structured Clinical Report generation
+        const reportForm = document.getElementById('reportForm');
+        const reportQuestionEl = document.getElementById('reportQuestion');
+        const generateReportBtn = document.getElementById('generateReportBtn');
+        const reportSpinner = document.getElementById('reportSpinner');
+        const reportOutput = document.getElementById('reportOutput');
+        const reportContent = document.getElementById('reportContent');
+        const reportRefs = document.getElementById('reportRefs');
+        const copyReportBtn = document.getElementById('copyReportBtn');
+
+        if (reportQuestionEl) {
+            const autosize2 = () => {
+                reportQuestionEl.style.height = 'auto';
+                reportQuestionEl.style.height = Math.min(reportQuestionEl.scrollHeight, 200) + 'px';
+            };
+            reportQuestionEl.addEventListener('input', autosize2);
+            autosize2();
+        }
+
+        if (reportForm) {
+            reportForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const question = (reportQuestionEl?.value || '').trim() || (queryEl?.value || '').trim();
+                if (!question) {
+                    alert('Please enter a question for the structured report.');
+                    return;
+                }
+
+                try {
+                    generateReportBtn.disabled = true;
+                    reportSpinner.classList.remove('hidden');
+                    reportOutput.classList.add('hidden');
+
+                    const res = await fetch('/structured_report', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ question })
+                    });
+                    const data = await res.json().catch(() => ({}));
+
+                    if (res.ok && data.ok) {
+                        const report = data.report || '';
+                        const refs = Array.isArray(data.references) ? data.references.join(', ') : '';
+                        if (reportContent) reportContent.innerHTML = renderMarkdown(report);
+                        if (reportRefs) reportRefs.innerHTML = renderMarkdown(refs || '—');
+                        if (copyReportBtn) copyReportBtn.setAttribute('data-copy', report);
+                        reportOutput.classList.remove('hidden');
+                    } else {
+                        alert((data && data.message) ? data.message : 'Failed to generate report');
+                    }
+                } catch (err) {
+                    alert('Error generating report');
+                } finally {
+                    reportSpinner.classList.add('hidden');
+                    generateReportBtn.disabled = false;
+                }
+            });
         }
     })();
     </script>

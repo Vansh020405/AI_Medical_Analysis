@@ -26,7 +26,7 @@ embedder = SentenceTransformer("all-MiniLM-L6-v2")
 def get_embedding(text):
     return embedder.encode(text)
 
-client = OpenAI(api_key="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")
+client = OpenAI(api_key="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")
 
 
 def safe_chat_completion(**kwargs):
@@ -139,7 +139,8 @@ def query_corpus(query, index, chunks, embeddings):
     if index is None or not chunks:
         return "⚠️ No documents uploaded yet.", []
     query_vec = get_embedding(query).reshape(1, -1)
-    distances, indices = index.kneighbors(query_vec, n_neighbors=5)
+    n_nbrs = min(5, len(chunks))
+    distances, indices = index.kneighbors(query_vec, n_neighbors=n_nbrs)
     chosen = [chunks[i] for i in indices[0]]
 
     def ref_for(c):
@@ -179,23 +180,52 @@ corpus_embeddings = None
 def generate_structured_report(context, question):
     """
     Generate a clinician-friendly single structured report from context.
+    Returns a formatted markdown string with structured sections.
     """
-    system_prompt = (
-        "You are a clinical assistant. "
-        "From the provided document context and user question, create a SINGLE combined report "
-        "that is clear, clinician-friendly, and integrates all key deliverables. "
-        "The report should be concise, structured, and easy to review quickly, "
-        "supporting workflow integration."
-    )
+    system_prompt = """
+    You are a clinical assistant tasked with generating a structured medical report.
+    
+    INSTRUCTIONS:
+    1. Carefully analyze the provided medical context and user's question.
+    2. Generate a comprehensive, well-organized clinical report in markdown format.
+    3. Structure the report with the following sections:
+       - **Clinical Summary**: 2-3 sentence overview of key findings
+       - **Relevant History**: Pertinent medical history from context
+       - **Findings**: Detailed observations from test results/imaging
+       - **Assessment**: Clinical interpretation of findings
+       - **Recommendations**: Clear next steps for clinical management
+    
+    FORMATTING:
+    - Use markdown for formatting (headers, lists, emphasis)
+    - Be concise but thorough
+    - Use medical terminology appropriately
+    - Highlight critical findings with **bold**
+    - Include relevant measurements with units
+    - If information is missing, state 'Not specified in the provided context'
+    """
 
-    completion = safe_chat_completion(
-        model="gpt-4o-mini",
-        temperature=0,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {question}"}
-        ]
-    )
+    try:
+        completion = safe_chat_completion(
+            model="gpt-4",  # Using GPT-4 for better clinical reasoning
+            temperature=0.1,  # Slight temperature for minor variability
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"CONTEXT:\n{context}\n\nCLINICAL QUESTION: {question}"}
+            ]
+        )
+        
+        # Extract and clean the response
+        report = completion.choices[0].message.content.strip()
+        
+        # Ensure the response is properly formatted markdown
+        if not report.startswith('#'):
+            report = f"# Clinical Report\n\n{report}"
+            
+        return report
+        
+    except Exception as e:
+        print(f"Error generating structured report: {str(e)}")
+        return "Error: Unable to generate structured report. Please try again later."
 
     return completion.choices[0].message.content.strip()
 
@@ -305,6 +335,106 @@ def upload():
     except Exception as e:
         traceback.print_exc()
         return jsonify({"ok": False, "files": [], "errors": [{"filename": None, "error": str(e)[:200]}], "message": "Upload failed"})
+
+@app.route("/structured_report", methods=["POST"])
+def structured_report():
+    """
+    Generate a single structured clinical report for the provided question,
+    grounded in the uploaded document context (top-5 nearest chunks).
+    """
+    global corpus_index, corpus_chunks, corpus_embeddings
+    
+    # Validate request
+    if not request.is_json:
+        return jsonify({"ok": False, "message": "Request must be JSON"}), 400
+        
+    data = request.get_json()
+    question = (data.get("question") or "").strip()
+    
+    if not question:
+        return jsonify({"ok": False, "message": "Missing 'question' field in request"}), 400
+
+    try:
+        # Check if documents are loaded
+        if not corpus_index or not corpus_chunks or not corpus_embeddings.any():
+            return jsonify({
+                "ok": False, 
+                "message": "No documents have been uploaded and processed yet. Please upload documents first."
+            }), 400
+
+        # Get relevant context chunks
+        query_vec = get_embedding(question).reshape(1, -1)
+        n_nbrs = min(10, len(corpus_chunks))  # Increased to 10 for more context
+        distances, indices = corpus_index.kneighbors(query_vec, n_neighbors=n_nbrs)
+        
+        # Sort chunks by relevance (closest first)
+        sorted_chunks = sorted(
+            [(corpus_chunks[i], float(distances[0][j])) 
+             for j, i in enumerate(indices[0])],
+            key=lambda x: x[1]
+        )
+        
+        # Format context with source references
+        def format_chunk(chunk, score):
+            source = chunk.get('source', 'Unknown Source')
+            page = f"page {chunk['page']}" if 'page' in chunk else ""
+            row = f"row {chunk['row']}" if 'row' in chunk else ""
+            para = f"paragraph {chunk['para']}" if 'para' in chunk else ""
+            
+            ref_parts = [p for p in [source, page, row, para] if p]
+            ref = " • ".join(ref_parts)
+            
+            return f"[Source: {ref}]\n{chunk['text']}\n[Relevance: {1-score:.2f}]\n"
+        
+        # Build context with relevance scores
+        context_parts = []
+        references = set()
+        
+        for chunk, score in sorted_chunks:
+            if score < 1.0:  # Only include reasonably relevant chunks
+                context_parts.append(format_chunk(chunk, score))
+                
+                # Build clean reference
+                source = chunk.get('source', 'Unknown Source')
+                if 'page' in chunk:
+                    ref = f"{source} (page {chunk['page']})"
+                else:
+                    ref = source
+                references.add(ref)
+        
+        context = "\n\n".join(context_parts)
+        
+        if not context.strip():
+            return jsonify({
+                "ok": False,
+                "message": "Insufficient relevant information found in the documents to generate a report."
+            }), 404
+        
+        # Generate the structured report
+        report = generate_structured_report(context, question)
+        
+        if not report or report.startswith("Error:"):
+            return jsonify({
+                "ok": False,
+                "message": "Failed to generate report. Please try again with a different question.",
+                "details": report
+            }), 500
+        
+        return jsonify({
+            "ok": True, 
+            "report": report, 
+            "references": sorted(list(references)),
+            "context_chunks_used": len(context_parts)
+        })
+        
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({
+            "ok": False,
+            "message": "An error occurred while generating the report.",
+            "error": str(e)
+        }), 500
+        return jsonify({"ok": False, "message": str(e)[:200]}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, use_reloader=False)
