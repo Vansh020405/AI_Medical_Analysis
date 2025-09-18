@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Medical Report Analyzer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header class="site-header" role="banner">
+        <div class="container topbar">
+            <div class="brand">
+                <div class="brand-mark" aria-hidden="true">📄</div>
+                <div>
+                    <h1 class="app-title">AI Medical Report Analyzer</h1>
+                    <p class="app-subtitle">Securely analyze your medical reports and get clear insights.</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <section class="hero">
+        <div class="container">
+            <h2 class="hero-title">Understand Your Health, Instantly</h2>
+            <p class="hero-subtitle">Upload your medical reports, and our secure AI will help you understand complex medical terms, test results, and more.</p>
+            <div class="features">
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3 class="feature-title">Confidential & Secure</h3>
+                    <p>Your medical reports are encrypted and processed with the utmost confidentiality. We prioritize your privacy.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔬</div>
+                    <h3 class="feature-title">Intelligent Analysis</h3>
+                    <p>Our AI breaks down complex medical jargon, lab results, and diagnoses into easy-to-understand language.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">❤️</div>
+                    <h3 class="feature-title">Ask Health Questions</h3>
+                    <p>Ask specific questions about your reports and get clear, AI-powered answers to help you prepare for doctor's appointments.</p>
+                </div>
+            </div>
+            <a href="#upload-section" class="btn btn-primary hero-cta">Get Started</a>
+        </div>
+    </section>
+
+    <main class="container" role="main">
+        <div class="accordion">
+            <details class="card compact" id="upload-section" open>
+                <summary class="section-title" id="uploaded-files-title">📂 Upload Your Medical Report</summary>
+                <div class="details-content">
+                    <form id="uploadForm" class="form form-vertical" method="POST" enctype="multipart/form-data">
+                        <label for="files" id="dropzone" class="dropzone" aria-label="Upload documents by clicking or dragging files">
+                            <input id="files" type="file" name="files" accept=".pdf,.txt,.csv" multiple>
+                            <div class="dropzone-content">
+                                <div class="dropzone-icon">⬆️</div>
+                                <div>
+                                    <div class="dropzone-title">Drag & drop your report (PDF, TXT)</div>
+                                    <div class="dropzone-subtitle">or click to browse</div>
+                                </div>
+                            </div>
+                        </label>
+                        <div class="upload-controls">
+                            <button id="uploadBtn" class="btn" type="submit">Upload Files</button>
+                            <button id="changeFileBtn" class="btn btn-secondary" type="button" title="Choose a different file">Change file</button>
+                        </div>
+
+                        <div id="uploadSpinner" class="spinner hidden" role="status" aria-live="polite">
+                            <div class="spinner-dot"></div>
+                            <div class="spinner-dot"></div>
+                            <div class="spinner-dot"></div>
+                            <div class="spinner-text">Uploading…</div>
+                        </div>
+
+                        <div id="uploadSuccess" class="success hidden">✅ Uploaded</div>
+
+                        <div id="fileMeta" class="file-meta">
+                            {% if uploaded_filename %}
+                            <span class="file-name">{{ uploaded_filename }}</span>
+                            {% if uploaded_size %}<span class="file-size">• {{ uploaded_size }}</span>{% endif %}
+                            <span class="file-status">✔ Uploaded</span>
+                            {% endif %}
+                        </div>
+
+                        {% if message %}
+                        <div class="alert alert-info">{{ message }}</div>
+                        {% endif %}
+                    </form>
+                </div>
+            </details>
+
+            <details class="card compact" id="question-section">
+                <summary class="section-title" id="your-questions-title">❓ Ask a Question</summary>
+                <div class="details-content">
+                    <form id="askForm" class="composer" method="POST">
+                        <textarea id="query" class="composer-input" name="query" rows="1" placeholder="e.g., 'What does high creatinine mean?'" required></textarea>
+                        <div class="composer-actions">
+                           
+                            <button id="sendBtn" class="send-btn" type="submit" title="Send">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" /></svg>
+                            </button>
+                        </div>
+                    </form>
+
+                    <div id="typing" class="typing hidden">
+                        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                    </div>
+                </div>
+            </details>
+        </div>
+
+        <div class="disclaimer-box">
+            <p><strong>Important:</strong> The analysis provided by this AI is for informational purposes only and is not a substitute for professional medical advice, diagnosis, or treatment. Always seek the advice of your physician or other qualified health provider with any questions you may have regarding a medical condition.</p>
+        </div>
+
+        <section class="card" aria-labelledby="ai-responses-title">
+            <h2 class="section-title with-icon" id="ai-responses-title"><span class="bot-icon" aria-hidden="true">🤖</span> AI Analysis</h2>
+
+            <div class="chat">
+                {% if last_query %}
+                <div class="bubble bubble-user">
+                    <div class="bubble-meta">You</div>
+                    <div class="bubble-content">{{ last_query }}</div>
+                </div>
+                {% endif %}
+
+                {% if answer %}
+                <div class="answer-card" id="aiAnswer" data-answer='{{ answer|tojson }}'>
+                    <div class="answer-row">
+                        <div class="answer-col">
+                            <h3 class="answer-subtitle">Short answer</h3>
+                            <div class="answer-short" id="answerShort"></div>
+                        </div>
+                        <div class="answer-col">
+                            <h3 class="answer-subtitle">Details</h3>
+                            <div class="answer-details" id="answerDetails"></div>
+                        </div>
+                    </div>
+                    <div class="answer-row">
+                        <div class="answer-col">
+                            <h3 class="answer-subtitle">References</h3>
+                            <div class="answer-refs" id="answerRefs"></div>
+                        </div>
+                        <div class="answer-col">
+                            <h3 class="answer-subtitle">Next step</h3>
+                            <div class="answer-next" id="answerNext"></div>
+                        </div>
+                    </div>
+                    <div class="answer-actions">
+                        <button class="mini-btn copy-btn" data-copy="{{ answer }}" title="Copy to clipboard">📋 Copy</button>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if risk_flag %}
+                <div id="riskAlert" class="risk-alert" data-risk="{{ risk_flag }}">
+                    <div class="risk-icon"></div>
+                    <div>
+                        <div class="risk-title"></div>
+                        <div class="risk-suggestion"></div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-about">
+                    <h4 class="footer-title">AI Medical Report Analyzer</h4>
+                    <p class="footer-disclaimer-text">Providing AI-powered insights for informational purposes. Not a substitute for professional medical advice.</p>
+                </div>
+                <div class="footer-links">
+                    <h4 class="footer-title">Navigate</h4>
+                    <ul>
+                        <li><a href="#">Privacy Policy</a></li>
+                        <li><a href="#">Terms of Service</a></li>
+                        <li><a href="#">Contact Us</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 AI Medical Report Analyzer. All Rights Reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+    (function() {
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('files');
+        const uploadForm = document.getElementById('uploadForm');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const changeFileBtn = document.getElementById('changeFileBtn');
+        const uploadSpinner = document.getElementById('uploadSpinner');
+        const uploadSuccess = document.getElementById('uploadSuccess');
+        const fileMeta = document.getElementById('fileMeta');
+        const askForm = document.getElementById('askForm');
+        const queryEl = document.getElementById('query');
+        const typing = document.getElementById('typing');
+
+        // Drag & drop
+        if (dropzone && fileInput) {
+            const prevent = (e) => { e.preventDefault(); e.stopPropagation(); };
+            ['dragenter','dragover','dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, prevent));
+            ['dragenter','dragover'].forEach(evt => dropzone.addEventListener(evt, () => dropzone.classList.add('is-dragover')));
+            ['dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, () => dropzone.classList.remove('is-dragover')));
+            dropzone.addEventListener('click', () => fileInput.click());
+            dropzone.addEventListener('drop', (e) => {
+                if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    fileInput.files = e.dataTransfer.files;
+                }
+            });
+            fileInput.addEventListener('change', () => {
+                if (fileInput.files && fileInput.files.length > 0) {
+                    if (fileInput.files.length === 1) {
+                        const f = fileInput.files[0];
+                        dropzone.querySelector('.dropzone-title').textContent = f.name;
+                        const size = f.size;
+                        const pretty = size >= 1048576 ? (size/1048576).toFixed(2) + ' MB' : (size/1024).toFixed(1) + ' KB';
+                        dropzone.querySelector('.dropzone-subtitle').textContent = pretty;
+                    } else {
+                        dropzone.querySelector('.dropzone-title').textContent = fileInput.files.length + ' files selected';
+                        dropzone.querySelector('.dropzone-subtitle').textContent = 'PDF/TXT/CSV';
+                    }
+                }
+            });
+        }
+
+        // Change file action
+        if (changeFileBtn && fileInput) {
+            changeFileBtn.addEventListener('click', () => {
+                fileInput.click();
+            });
+        }
+
+        // AJAX upload with determinate progress
+        if (uploadForm && fileInput && uploadSpinner) {
+            uploadForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (!fileInput.files || fileInput.files.length === 0) return;
+                uploadSuccess.classList.add('hidden');
+                uploadSpinner.classList.remove('hidden');
+                uploadBtn.disabled = true;
+
+                const formData = new FormData();
+                for (let i = 0; i < fileInput.files.length; i++) {
+                    formData.append('files', fileInput.files[i]);
+                }
+
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', '/upload');
+                xhr.onload = function() {
+                    uploadBtn.disabled = false;
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            const res = JSON.parse(xhr.responseText);
+                            if (res.ok) {
+                                setTimeout(() => {
+                                    uploadSpinner.classList.add('hidden');
+                                    uploadSuccess.classList.remove('hidden');
+                                    uploadSuccess.classList.add('pop');
+                                }, 400);
+                                if (fileMeta && Array.isArray(res.files)) {
+                                    fileMeta.innerHTML = res.files.map(f => '<div><span class="file-name">' + f.filename + '</span>' + (f.size ? ' <span class="file-size">• ' + f.size + '</span>' : '') + ' <span class="file-status">✔ Uploaded</span></div>').join('');
+                                }
+                                if (Array.isArray(res.errors) && res.errors.length) {
+                                    const errs = res.errors.map(e => e.filename + ': ' + e.error).join(', ');
+                                    alert('Some files failed: ' + errs);
+                                }
+                            }
+                        } catch (_) {}
+                    } else {
+                        try {
+                            const res = JSON.parse(xhr.responseText || '{}');
+                            const errs = (res.errors || []).map(e => (e.filename || 'file') + ': ' + (e.error || 'Unknown error')).join('\n');
+                            alert('Upload failed' + (errs ? (' for some files:\n' + errs) : ''));
+                        } catch (_) {
+                            alert('Upload failed');
+                        }
+                    }
+                };
+                xhr.onerror = function() {
+                    uploadBtn.disabled = false;
+                    uploadSpinner.classList.add('hidden');
+                    alert('Upload error');
+                };
+                xhr.send(formData);
+            });
+        }
+
+        // Composer auto-resize and Enter/Shift+Enter
+        if (queryEl) {
+            const autosize = () => {
+                queryEl.style.height = 'auto';
+                queryEl.style.height = Math.min(queryEl.scrollHeight, 200) + 'px';
+            };
+            queryEl.addEventListener('input', autosize);
+            autosize();
+            queryEl.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    askForm.requestSubmit();
+                }
+            });
+        }
+
+        // Typing indicator while waiting for response
+        if (askForm && typing) {
+            askForm.addEventListener('submit', () => {
+                typing.classList.remove('hidden');
+            });
+        }
+
+        // Copy and collapse actions
+        document.addEventListener('click', (e) => {
+            const copyBtn = e.target.closest('.copy-btn');
+            if (copyBtn) {
+                const text = copyBtn.getAttribute('data-copy') || '';
+                navigator.clipboard.writeText(text).then(() => {
+                    copyBtn.textContent = '✅ Copied';
+                    setTimeout(() => copyBtn.textContent = '📋 Copy', 1200);
+                });
+            }
+        });
+
+        // Smooth scroll for 'Get Started' button
+        const ctaButton = document.querySelector('.hero-cta');
+        if (ctaButton) {
+            ctaButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href');
+                const targetElement = document.querySelector(targetId);
+                if (targetElement) {
+                    targetElement.scrollIntoView({ behavior: 'smooth' });
+                    // Open the details section after scrolling
+                    setTimeout(() => {
+                        targetElement.setAttribute('open', '');
+                    }, 500); // Adjust delay as needed
+                }
+            });
+        }
+
+        // Accordion behavior
+        const accordionItems = document.querySelectorAll('.accordion details');
+        accordionItems.forEach(item => {
+            item.addEventListener('toggle', (e) => {
+                if (item.open) {
+                    accordionItems.forEach(otherItem => {
+                        if (otherItem !== item) {
+                            otherItem.removeAttribute('open');
+                        }
+                    });
+                }
+            });
+        });
+
+        // Risk Flag Display
+        const displayRisk = () => {
+            const alertEl = document.getElementById('riskAlert');
+            if (!alertEl || !alertEl.dataset.risk) return;
+
+            const riskText = alertEl.dataset.risk.toLowerCase();
+            const iconEl = alertEl.querySelector('.risk-icon');
+            const titleEl = alertEl.querySelector('.risk-title');
+            const suggestionEl = alertEl.querySelector('.risk-suggestion');
+
+            let riskLevel = 'low';
+            if (riskText.includes('critical')) {
+                riskLevel = 'critical';
+            } else if (riskText.includes('high')) {
+                riskLevel = 'high';
+            } else if (riskText.includes('moderate')) {
+                riskLevel = 'medium';
+            }
+
+            alertEl.classList.remove('risk-high', 'risk-medium', 'risk-low');
+
+            if (riskLevel === 'critical') {
+                alertEl.classList.add('risk-high'); // Use high-risk color for critical
+                iconEl.textContent = '❗';
+                titleEl.textContent = 'Critical Risk';
+            } else if (riskLevel === 'high') {
+                alertEl.classList.add('risk-high');
+                iconEl.textContent = '❗';
+                titleEl.textContent = 'High Risk';
+            } else if (riskLevel === 'medium') {
+                alertEl.classList.add('risk-medium');
+                iconEl.textContent = '⚠️';
+                titleEl.textContent = 'Moderate Risk';
+            } else {
+                alertEl.classList.add('risk-low');
+                iconEl.textContent = '✅';
+                titleEl.textContent = 'Low Risk';
+            }
+
+            // Extract the suggestion part from the risk flag text
+            const suggestionText = alertEl.dataset.risk.split('→')[1] || ' Please follow the advice provided.';
+            suggestionEl.textContent = suggestionText.trim();
+        };
+
+        displayRisk();
+
+        // Render structured AI answer if present
+        const answerRoot = document.getElementById('aiAnswer');
+        if (answerRoot) {
+            const raw = JSON.parse(answerRoot.dataset.answer || '""');
+
+            const md = (s) => s
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1<\/strong>')
+                .replace(/\n\n/g, '<br/><br/>')
+                .replace(/\n-\s+/g, '<br/>• ');
+
+            // naive segmentation by numbered sections added in prompt
+            const shortMatch = raw.match(/1\)\s*Short[^:]*:\s*([\s\S]*?)(?=\n\s*2\)|$)/i);
+            const detailMatch = raw.match(/2\)\s*Detailed[^:]*:\s*([\s\S]*?)(?=\n\s*3\)|$)/i);
+            const refMatch = raw.match(/(3\)\s*Page[^:]*:\s*|Pages referenced:\s*)([\s\S]*?)(?=\n\s*4\)|$)/i);
+            const nextMatch = raw.match(/4\)\s*[^:]*:\s*([\s\S]*)$/i);
+
+            const shortEl = document.getElementById('answerShort');
+            const detailsEl = document.getElementById('answerDetails');
+            const refsEl = document.getElementById('answerRefs');
+            const nextEl = document.getElementById('answerNext');
+
+            if (shortEl) shortEl.innerHTML = md(shortMatch ? shortMatch[1].trim() : raw.split('\n')[0] || '');
+
+            if (detailsEl) {
+                const details = detailMatch ? detailMatch[1].trim() : '';
+                if (/-\s+/.test(details)) {
+                    const items = details.split(/\n\s*-\s+/).filter(Boolean);
+                    const ul = document.createElement('ul');
+                    ul.className = 'kv-list';
+                    items.forEach((t) => {
+                        const li = document.createElement('li');
+                        li.innerHTML = md(t);
+                        ul.appendChild(li);
+                    });
+                    detailsEl.appendChild(ul);
+                } else {
+                    detailsEl.innerHTML = md(details || '');
+                }
+            }
+
+            if (refsEl) refsEl.innerHTML = md(refMatch ? (refMatch[2] || refMatch[1] || '').trim() : '—');
+            if (nextEl) nextEl.innerHTML = md(nextMatch ? nextMatch[1].trim() : '');
+
+        }
+    })();
+    </script>
+</body>
+</html>
