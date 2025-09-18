@@ -52,19 +52,19 @@
             <details class="card compact" id="upload-section" open>
                 <summary class="section-title" id="uploaded-files-title">📂 Upload Your Medical Report</summary>
                 <div class="details-content">
-                    <form id="uploadForm" class="form form-vertical" method="POST" enctype="multipart/form-data">
-                        <label for="files" id="dropzone" class="dropzone" aria-label="Upload documents by clicking or dragging files">
-                            <input id="files" type="file" name="files" accept=".pdf,.txt,.csv" multiple>
+                    <form id="uploadForm" class="form form-vertical">
+                        <label for="file" id="dropzone" class="dropzone" aria-label="Upload documents by clicking or dragging files">
+                            <input id="file" type="file" name="file" accept=".pdf,.txt,.csv">
                             <div class="dropzone-content">
                                 <div class="dropzone-icon">⬆️</div>
                                 <div>
-                                    <div class="dropzone-title">Drag & drop your report (PDF, TXT)</div>
+                                    <div class="dropzone-title">Drag & drop your report (PDF, TXT, CSV)</div>
                                     <div class="dropzone-subtitle">or click to browse</div>
                                 </div>
                             </div>
                         </label>
                         <div class="upload-controls">
-                            <button id="uploadBtn" class="btn" type="submit">Upload Files</button>
+                            <button id="uploadBtn" class="btn" type="submit">Upload File</button>
                             <button id="changeFileBtn" class="btn btn-secondary" type="button" title="Choose a different file">Change file</button>
                         </div>
 
@@ -75,19 +75,14 @@
                             <div class="spinner-text">Uploading…</div>
                         </div>
 
-                        <div id="uploadSuccess" class="success hidden">✅ Uploaded</div>
+                        <div id="uploadSuccess" class="success hidden"></div>
+                        <div id="uploadError" class="error hidden"></div>
 
                         <div id="fileMeta" class="file-meta">
-                            {% if uploaded_filename %}
-                            <span class="file-name">{{ uploaded_filename }}</span>
-                            {% if uploaded_size %}<span class="file-size">• {{ uploaded_size }}</span>{% endif %}
-                            <span class="file-status">✔ Uploaded</span>
-                            {% endif %}
+                            <span id="fileName" class="file-name"></span>
+                            <span id="fileSize" class="file-size"></span>
+                            <span id="fileStatus" class="file-status"></span>
                         </div>
-
-                        {% if message %}
-                        <div class="alert alert-info">{{ message }}</div>
-                        {% endif %}
                     </form>
                 </div>
             </details>
@@ -167,39 +162,18 @@
             </div>
         </section>
         
-        <section class="card" aria-labelledby="structured-report-title" id="structured-report">
-            <h2 class="section-title with-icon" id="structured-report-title"><span class="bot-icon" aria-hidden="true">📋</span> Structured Clinical Report</h2>
-            <p class="muted">Generate a single, clinician-friendly consolidated report grounded in your uploaded documents.</p>
-
-            <form id="reportForm" class="composer" method="POST">
-                <textarea id="reportQuestion" class="composer-input" name="reportQuestion" rows="1" placeholder="e.g., Summarize key findings and recommended next steps">{{ last_query or '' }}</textarea>
-                <div class="composer-actions">
-                    <button id="generateReportBtn" class="send-btn" type="submit" title="Generate structured report">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" /></svg>
-                    </button>
-                </div>
-            </form>
-
-            <div id="reportSpinner" class="spinner hidden" role="status" aria-live="polite">
-                <div class="spinner-dot"></div>
-                <div class="spinner-dot"></div>
-                <div class="spinner-dot"></div>
-                <div class="spinner-text">Generating report…</div>
-            </div>
-
-            <div id="reportOutput" class="answer-card hidden" aria-live="polite">
-                <h3 class="answer-subtitle">Report</h3>
-                <div id="reportContent" class="answer-details"></div>
-
-                <h3 class="answer-subtitle">References</h3>
-                <div id="reportRefs" class="answer-refs"></div>
-
-                <div class="answer-actions">
-                    <button id="copyReportBtn" class="mini-btn copy-btn" data-copy="" title="Copy report">📋 Copy</button>
-                </div>
-            </div>
-        </section>
+        
     </main>
+    <details class="card compact" id="report-section">
+        <summary class="section-title">📑 Structured Clinical Report</summary>
+        <div class="details-content">
+            <button id="reportBtn" class="btn btn-primary">Generate Report</button>
+            <div id="reportResult" class="summary-box hidden">
+                <h3 class="answer-subtitle">AI Report</h3>
+                <div id="reportText"></div>
+            </div>
+        </div>
+    </details>
 
     <footer class="site-footer">
         <div class="container">
@@ -226,16 +200,179 @@
     <script>
     (function() {
         const dropzone = document.getElementById('dropzone');
-        const fileInput = document.getElementById('files');
+        const fileInput = document.getElementById('file');
         const uploadForm = document.getElementById('uploadForm');
         const uploadBtn = document.getElementById('uploadBtn');
         const changeFileBtn = document.getElementById('changeFileBtn');
         const uploadSpinner = document.getElementById('uploadSpinner');
         const uploadSuccess = document.getElementById('uploadSuccess');
-        const fileMeta = document.getElementById('fileMeta');
+        const uploadError = document.getElementById('uploadError');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const fileStatus = document.getElementById('fileStatus');
         const askForm = document.getElementById('askForm');
         const queryEl = document.getElementById('query');
         const typing = document.getElementById('typing');
+        const reportBtn = document.getElementById('reportBtn');
+        const reportResult = document.getElementById('reportResult');
+        const reportText = document.getElementById('reportText');
+
+        // Helper functions
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function showError(element, message) {
+            if (element) {
+                element.textContent = message;
+                element.classList.remove('hidden');
+            }
+        }
+
+        // File upload handling
+        if (fileInput) {
+            fileInput.addEventListener('change', (e) => {
+                if (fileInput.files.length > 0) {
+                    const file = fileInput.files[0];
+                    fileName.textContent = file.name;
+                    fileSize.textContent = formatFileSize(file.size);
+                    fileStatus.textContent = 'Ready to upload';
+                    fileStatus.className = 'file-status ready';
+                    uploadError.classList.add('hidden');
+                    
+                    // Enable the report button when a file is selected
+                    if (reportBtn) {
+                        reportBtn.disabled = false;
+                    }
+                }
+            });
+        }
+
+        // Handle form submission
+        if (uploadForm) {
+            uploadForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                if (!fileInput.files || fileInput.files.length === 0) {
+                    showError(uploadError, 'Please select a file to upload');
+                    return;
+                }
+
+                const formData = new FormData(uploadForm);
+
+                try {
+                    // Show loading state
+                    uploadBtn.disabled = true;
+                    uploadSpinner.classList.remove('hidden');
+                    uploadSuccess.classList.add('hidden');
+                    uploadError.classList.add('hidden');
+                    fileStatus.textContent = 'Uploading...';
+                    fileStatus.className = 'file-status uploading';
+
+                    // Send the file to the server
+                    const response = await fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Upload failed');
+                    }
+
+                    // Show success message
+                    uploadSuccess.textContent = '✅ File uploaded and processed successfully';
+                    uploadSuccess.classList.remove('hidden');
+                    fileStatus.textContent = '✔ Ready for analysis';
+                    fileStatus.className = 'file-status uploaded';
+                    
+                    // Enable report generation
+                    if (reportBtn) {
+                        reportBtn.disabled = false;
+                    }
+
+                } catch (error) {
+                    console.error('Upload error:', error);
+                    showError(uploadError, error.message || 'Failed to upload file');
+                    fileStatus.textContent = 'Upload failed';
+                    fileStatus.className = 'file-status error';
+                } finally {
+                    uploadBtn.disabled = false;
+                    uploadSpinner.classList.add('hidden');
+                }
+            });
+        }
+
+        // Report generation
+        if (reportBtn) {
+            // Initially disable the report button until a file is uploaded
+            reportBtn.disabled = true;
+            
+            reportBtn.addEventListener('click', async () => {
+                try {
+                    // Update UI
+                    reportBtn.disabled = true;
+                    reportBtn.textContent = "⏳ Generating Report...";
+                    reportResult.classList.remove('hidden');
+                    reportText.textContent = "Processing your request...";
+                    
+                    // Clear any previous errors
+                    const errorElement = reportResult.querySelector('.error');
+                    if (errorElement) {
+                        errorElement.remove();
+                    }
+
+                    // Make the API request
+                    const response = await fetch('/structured-report');
+                    
+                    // Check for HTTP errors
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.error || `Server responded with status ${response.status}`);
+                    }
+                    
+                    // Parse the JSON response
+                    const data = await response.json();
+                    
+                    // Check for application-level errors
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    
+                    // Display the report
+                    if (data.report) {
+                        reportText.innerHTML = data.report.replace(/\n/g, '<br/>');
+                    } else {
+                        throw new Error('No report data received');
+                    }
+                    
+                } catch (error) {
+                    console.error('Error generating report:', error);
+                    
+                    // Create or update error element
+                    let errorElement = reportResult.querySelector('.error');
+                    if (!errorElement) {
+                        errorElement = document.createElement('div');
+                        errorElement.className = 'error';
+                        reportResult.insertBefore(errorElement, reportText);
+                    }
+                    
+                    errorElement.textContent = `❌ Error: ${error.message || 'Failed to generate report'}`;
+                    reportText.textContent = '';
+                    
+                } finally {
+                    // Always re-enable the button
+                    reportBtn.disabled = false;
+                    reportBtn.textContent = "Generate Report";
+                }
+            });
+        }
+
         
         // Simple markdown-ish renderer for emphasis and breaks
         const renderMarkdown = (s = '') => s
@@ -249,23 +386,58 @@
             ['dragenter','dragover','dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, prevent));
             ['dragenter','dragover'].forEach(evt => dropzone.addEventListener(evt, () => dropzone.classList.add('is-dragover')));
             ['dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, () => dropzone.classList.remove('is-dragover')));
+            
+            // Click to select file
             dropzone.addEventListener('click', () => fileInput.click());
+            
+            // Handle dropped files
             dropzone.addEventListener('drop', (e) => {
                 if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
-                    fileInput.files = e.dataTransfer.files;
+                    // Only take the first file since we're doing single file uploads now
+                    const file = e.dataTransfer.files[0];
+                    
+                    // Create a new FileList to hold the file
+                    const dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(file);
+                    fileInput.files = dataTransfer.files;
+                    
+                    // Update the UI to show the selected file
+                    fileName.textContent = file.name;
+                    fileSize.textContent = formatFileSize(file.size);
+                    fileStatus.textContent = 'Ready to upload';
+                    fileStatus.className = 'file-status ready';
+                    uploadError.classList.add('hidden');
+                    
+                    // Update dropzone preview
+                    dropzone.querySelector('.dropzone-title').textContent = file.name;
+                    dropzone.querySelector('.dropzone-subtitle').textContent = formatFileSize(file.size);
+                    
+                    // Enable the report button when a file is selected
+                    if (reportBtn) {
+                        reportBtn.disabled = false;
+                    }
                 }
             });
+            
+            // Update dropzone preview when file is selected via input
             fileInput.addEventListener('change', () => {
                 if (fileInput.files && fileInput.files.length > 0) {
-                    if (fileInput.files.length === 1) {
-                        const f = fileInput.files[0];
-                        dropzone.querySelector('.dropzone-title').textContent = f.name;
-                        const size = f.size;
-                        const pretty = size >= 1048576 ? (size/1048576).toFixed(2) + ' MB' : (size/1024).toFixed(1) + ' KB';
-                        dropzone.querySelector('.dropzone-subtitle').textContent = pretty;
-                    } else {
-                        dropzone.querySelector('.dropzone-title').textContent = fileInput.files.length + ' files selected';
-                        dropzone.querySelector('.dropzone-subtitle').textContent = 'PDF/TXT/CSV';
+                    const file = fileInput.files[0];
+                    
+                    // Update the file info display
+                    fileName.textContent = file.name;
+                    fileSize.textContent = formatFileSize(file.size);
+                    fileStatus.textContent = 'Ready to upload';
+                    fileStatus.className = 'file-status ready';
+                    uploadError.classList.add('hidden');
+                    
+                    // Update dropzone preview
+                    dropzone.querySelector('.dropzone-title').textContent = file.name;
+                    dropzone.querySelector('.dropzone-subtitle').textContent = formatFileSize(file.size);
+                    
+                    // Enable the report button when a file is selected
+                    if (reportBtn) {
+                        reportBtn.disabled = false;
                     }
                 }
             });
@@ -278,60 +450,8 @@
             });
         }
 
-        // AJAX upload with determinate progress
-        if (uploadForm && fileInput && uploadSpinner) {
-            uploadForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                if (!fileInput.files || fileInput.files.length === 0) return;
-                uploadSuccess.classList.add('hidden');
-                uploadSpinner.classList.remove('hidden');
-                uploadBtn.disabled = true;
-
-                const formData = new FormData();
-                for (let i = 0; i < fileInput.files.length; i++) {
-                    formData.append('files', fileInput.files[i]);
-                }
-
-                const xhr = new XMLHttpRequest();
-                xhr.open('POST', '/upload');
-                xhr.onload = function() {
-                    uploadBtn.disabled = false;
-                    if (xhr.status >= 200 && xhr.status < 300) {
-                        try {
-                            const res = JSON.parse(xhr.responseText);
-                            if (res.ok) {
-                                setTimeout(() => {
-                                    uploadSpinner.classList.add('hidden');
-                                    uploadSuccess.classList.remove('hidden');
-                                    uploadSuccess.classList.add('pop');
-                                }, 400);
-                                if (fileMeta && Array.isArray(res.files)) {
-                                    fileMeta.innerHTML = res.files.map(f => '<div><span class="file-name">' + f.filename + '</span>' + (f.size ? ' <span class="file-size">• ' + f.size + '</span>' : '') + ' <span class="file-status">✔ Uploaded</span></div>').join('');
-                                }
-                                if (Array.isArray(res.errors) && res.errors.length) {
-                                    const errs = res.errors.map(e => e.filename + ': ' + e.error).join(', ');
-                                    alert('Some files failed: ' + errs);
-                                }
-                            }
-                        } catch (_) {}
-                    } else {
-                        try {
-                            const res = JSON.parse(xhr.responseText || '{}');
-                            const errs = (res.errors || []).map(e => (e.filename || 'file') + ': ' + (e.error || 'Unknown error')).join('\n');
-                            alert('Upload failed' + (errs ? (' for some files:\n' + errs) : ''));
-                        } catch (_) {
-                            alert('Upload failed');
-                        }
-                    }
-                };
-                xhr.onerror = function() {
-                    uploadBtn.disabled = false;
-                    uploadSpinner.classList.add('hidden');
-                    alert('Upload error');
-                };
-                xhr.send(formData);
-            });
-        }
+        // File upload handling is now handled by the earlier code block
+        // This section is intentionally left blank as the functionality was moved up
 
         // Composer auto-resize and Enter/Shift+Enter
         if (queryEl) {
