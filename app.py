@@ -176,6 +176,28 @@ corpus_index = None
 corpus_chunks = []
 corpus_embeddings = None
 
+def generate_structured_report(context, question):
+    """
+    Generate a clinician-friendly single structured report from context.
+    """
+    system_prompt = (
+        "You are a clinical assistant. "
+        "From the provided document context and user question, create a SINGLE combined report "
+        "that is clear, clinician-friendly, and integrates all key deliverables. "
+        "The report should be concise, structured, and easy to review quickly, "
+        "supporting workflow integration."
+    )
+
+    completion = safe_chat_completion(
+        model="gpt-4o-mini",
+        temperature=0,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {question}"}
+        ]
+    )
+
+    return completion.choices[0].message.content.strip()
 
 @app.route("/", methods=["GET", "POST"])
 def index():
