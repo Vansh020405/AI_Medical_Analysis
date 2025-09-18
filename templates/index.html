@@ -310,12 +310,15 @@
                     fileStatus.textContent = '✔ Ready for analysis';
                     fileStatus.className = 'file-status uploaded';
                     
-                    // Enable report and diagnosis generation
+                    // Enable report, diagnosis, and alerts generation
                     if (reportBtn) {
                         reportBtn.disabled = false;
                     }
                     if (diagnosisBtn) {
                         diagnosisBtn.disabled = false;
+                    }
+                    if (alertsBtn) {
+                        alertsBtn.disabled = false;
                     }
 
                 } catch (error) {
@@ -460,6 +463,75 @@
                     // Always re-enable the button
                     diagnosisBtn.disabled = false;
                     diagnosisBtn.textContent = "Generate Ranked Diagnosis";
+                }
+            });
+        }
+
+        // Red Flag Alerts
+        const alertsBtn = document.getElementById('alertsBtn');
+        const alertsResult = document.getElementById('alertsResult');
+        const alertsText = document.getElementById('alertsText');
+
+        if (alertsBtn && alertsResult && alertsText) {
+            // Initially disable the alerts button until a file is uploaded
+            alertsBtn.disabled = true;
+            
+            alertsBtn.addEventListener('click', async () => {
+                try {
+                    // Update UI
+                    alertsBtn.disabled = true;
+                    alertsBtn.textContent = "⏳ Checking for Alerts...";
+                    alertsResult.classList.remove('hidden');
+                    alertsText.textContent = "Scanning for critical conditions...";
+                    
+                    // Clear any previous errors
+                    const errorElement = alertsResult.querySelector('.error');
+                    if (errorElement) {
+                        errorElement.remove();
+                    }
+
+                    // Make the API request
+                    const response = await fetch('/red-flag-alerts');
+                    
+                    // Check for HTTP errors
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.error || `Server responded with status ${response.status}`);
+                    }
+                    
+                    // Parse the JSON response
+                    const data = await response.json();
+                    
+                    // Check for application-level errors
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    
+                    // Display the alerts
+                    if (data.alerts) {
+                        alertsText.innerHTML = data.alerts.replace(/\n/g, '<br/>');
+                    } else {
+                        alertsText.innerHTML = "✅ No critical alerts detected.";
+                    }
+                    
+                } catch (error) {
+                    console.error('Error checking for alerts:', error);
+                    
+                    // Create or update error element
+                    let errorElement = alertsResult.querySelector('.error');
+                    if (!errorElement) {
+                        errorElement = document.createElement('div');
+                        errorElement.className = 'error';
+                        alertsResult.insertBefore(errorElement, alertsText);
+                    }
+                    
+                    errorElement.textContent = `❌ Error: ${error.message || 'Failed to check for alerts'}`;
+                    alertsText.textContent = '';
+                    
+                } finally {
+                    // Always re-enable the button
+                    alertsBtn.disabled = false;
+                    alertsBtn.textContent = "Check for Critical Alerts";
                 }
             });
         }

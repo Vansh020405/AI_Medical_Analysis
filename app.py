@@ -245,6 +245,74 @@ def generate_red_flag_alerts(index, chunks, embeddings):
         ]
     )
     return completion.choices[0].message.content
+# Risk Stratification
+def generate_risk_stratification(index, chunks, embeddings):
+    if index is None or not chunks:
+        return "⚠️ No documents uploaded yet."
+    
+    context = "\n\n".join([f"[{c['source']}]\n{c['text']}" for c in chunks[:10]])
+
+    completion = safe_chat_completion(
+        model="gpt-4o-mini",
+        temperature=0,
+        messages=[
+            {"role": "system", "content": (
+                "You are a clinical AI assistant. From the provided context, "
+                "analyze and categorize the patient's risk into Low, Medium, or High. "
+                "For each category, include:\n"
+                "- Key risk drivers or contributing factors\n"
+                "- Explanation of why the risk falls into that category\n"
+                "Highlight key terms in **bold**."
+            )},
+            {"role": "user", "content": f"Context:\n{context}\n\nGenerate Risk Stratification with key drivers."}
+        ]
+    )
+    return completion.choices[0].message.content
+# Explainability Pack
+
+# Explainability Pack
+def generate_explainability_pack(index, chunks, embeddings):
+    if index is None or not chunks:
+        return "⚠️ No documents uploaded yet."
+    
+    context = "\n\n".join([f"[{c['source']}]\n{c['text']}" for c in chunks[:10]])
+
+    completion = safe_chat_completion(
+        model="gpt-4o-mini",
+        temperature=0,
+        messages=[
+            {"role": "system", "content": (
+                "You are a clinical AI assistant. Generate an **Explainability Pack** "
+                "that transparently maps the system outputs (diagnoses, alerts, risk) "
+                "to the specific patient data points or document values that support them. "
+                "Highlight key terms in **bold**."
+            )},
+            {"role": "user", "content": f"Context:\n{context}\n\nGenerate Explainability Pack."}
+        ]
+    )
+    return completion.choices[0].message.content
+# Validation Notes
+def generate_validation_notes(index, chunks, embeddings):
+    if index is None or not chunks:
+        return "⚠️ No documents uploaded yet."
+    
+    context = "\n\n".join([f"[{c['source']}]\n{c['text']}" for c in chunks[:10]])
+
+    completion = safe_chat_completion(
+        model="gpt-4o-mini",
+        temperature=0,
+        messages=[
+            {"role": "system", "content": (
+                "You are a clinical AI assistant. Generate **Validation Notes** including: "
+                "- Documentation of clinician review checkpoints\n"
+                "- Synthetic stress testing details\n"
+                "- Robustness checks and assumptions\n"
+                "Highlight key terms in **bold**."
+            )},
+            {"role": "user", "content": f"Context:\n{context}\n\nGenerate Validation Notes."}
+        ]
+    )
+    return completion.choices[0].message.content
 
 # Global store
 uploaded_chunks = []
